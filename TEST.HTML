@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>單一成本計算</title>
+  <style>
+    /* 使整體內容水平置中 */
+    body {
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    /* 以 row 包住「標籤 + 輸入框 / 選單」，並置中 */
+    .row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 1em;
+    }
+    /* 讓 label 與輸入框置中對齊 */
+    .row label {
+      text-align: center;
+      margin-right: 10px;
+    }
+    /* 輸入容器與下拉選單保持原本設定 */
+    .input-container {
+      position: relative;
+      display: inline-block;
+    }
+    .input-container span {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: #555;
+    }
+    .input-container input[type="number"],
+    .input-container select {
+      width: 150px;
+      box-sizing: border-box;
+      padding-right: 40px;
+      -moz-appearance: textfield;
+    }
+    /* 移除 number input 的上下小箭頭 */
+    .input-container input[type="number"]::-webkit-outer-spin-button,
+    .input-container input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    /* 結果文字也置中 */
+    #result {
+      text-align: center;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <label for="price">商品單價：</label>
+    <div class="input-container">
+      <input type="number" id="price">
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="quantity">採購數量：</label>
+    <div class="input-container">
+      <input type="number" id="quantity">
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="shipping">內地運費：</label>
+    <div class="input-container">
+      <input type="number" id="shipping">
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="weight">單一重量：</label>
+    <div class="input-container">
+      <input type="number" id="weight">
+      <span>kg</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="exchangeRate">國際匯率：</label>
+    <div class="input-container">
+      <input type="number" id="exchangeRate">
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="shippingMethod">選擇倉庫：</label>
+    <div class="input-container">
+      <select id="shippingMethod">
+        <option value="空運">空運</option>
+        <option value="平潭">平潭</option>
+        <option value="東莞">東莞</option>
+        <option value="深圳">深圳</option>
+        <option value="福州">福州</option>
+        <option value="廈門">廈門</option>
+        <option value="漳州海快">漳州海快</option>
+        <option value="漳州經濟">漳州經濟</option>
+        <option value="三明經濟">三明經濟</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="taxType">是否包稅：</label>
+    <div class="input-container">
+      <select id="taxType">
+        <option value="不包稅">不包稅</option>
+        <option value="頻繁稅">頻繁稅</option>
+        <option value="全包稅">全包稅</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <h2>計算結果：</h2>
+    <div id="result">尚未計算</div>
+  </div>
+
+  <script>
+    const fields = [
+      "price",
+      "quantity",
+      "shipping",
+      "weight",
+      "exchangeRate",
+      "shippingMethod",
+      "taxType"
+    ];
+
+    fields.forEach((id, index) => {
+      const elem = document.getElementById(id);
+
+      // 當使用者在每個欄位輸入或變動時自動計算
+      elem.addEventListener("input", calculateCost);
+      elem.addEventListener("change", calculateCost);
+
+      // 當按下 Enter 時，若不是最後一格就跳下一格；最後一格則跳回第一格
+      elem.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (index < fields.length - 1) {
+            document.getElementById(fields[index + 1]).focus();
+          } else {
+            document.getElementById(fields[0]).focus(); // 回到第一格
+          }
+        }
+      });
+
+      // 當「重新聚焦」該欄位時，清空原數值
+      elem.addEventListener("focus", () => {
+        if (elem.tagName === "INPUT") {
+          elem.value = "";
+        }
+        if (elem.tagName === "SELECT") {
+          elem.selectedIndex = -1;
+        }
+      });
+    });
+
+    function calculateCost() {
+      const price = parseFloat(document.getElementById("price").value) || 0;
+      const quantity = parseFloat(document.getElementById("quantity").value) || 0;
+      const shipping = parseFloat(document.getElementById("shipping").value) || 0;
+      const weight = parseFloat(document.getElementById("weight").value) || 0;
+      const exchangeRate = parseFloat(document.getElementById("exchangeRate").value) || 1;
+      const shippingMethod = document.getElementById("shippingMethod").value;
+      const taxType = document.getElementById("taxType").value;
+
+      // 若倉庫或稅種未選擇，顯示「尚未計算」
+      if (shippingMethod === "" || taxType === "") {
+        document.getElementById("result").textContent = "尚未計算";
+        return;
+      }
+
+      const intShipping = getInternationalShippingCost(shippingMethod, taxType, weight);
+      const totalLocalCost = (price * quantity + shipping) * exchangeRate;
+      const shippingCostEach = intShipping / (quantity || 1);
+      const singleCost = totalLocalCost + shippingCostEach;
+
+      document.getElementById("result").textContent = singleCost.toFixed(2);
+    }
+
+    function getInternationalShippingCost(method, tax, w) {
+      if (method === "空運") {
+        return w <= 1 ? 135 : 135 + (w - 1) * 109;
+      }
+      let basePrice = 0;
+      if (tax === "不包稅") {
+        if (method === "福州") {
+          basePrice = 50;
+        } else if (method === "漳州經濟" || method === "三明經濟") {
+          basePrice = 38;
+        } else {
+          basePrice = 45;
+        }
+      } else if (tax === "頻繁稅") {
+        if (method === "福州") {
+          basePrice = 60;
+        } else if (method === "漳州經濟" || method === "三明經濟") {
+          basePrice = 48;
+        } else {
+          basePrice = 55;
+        }
+      } else if (tax === "全包稅") {
+        if (method === "福州") {
+          basePrice = 65;
+        } else if (method === "漳州經濟" || method === "三明經濟") {
+          basePrice = 53;
+        } else {
+          basePrice = 60;
+        }
+      }
+      return basePrice * w;
+    }
+  </script>
+</body>
+</html>
